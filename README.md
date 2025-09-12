@@ -42,20 +42,41 @@ UNION(MyUnion
     , (std::string, name) 
     , (struct { int x; int y; }, point)  // Anonymous struct support
 );
+
+// Clear semantic access
+MyUnion u1 = MyUnion::create_index(0);
+MyUnion u2 = MyUnion::create_value(42);
+
+// With std::variant, same types require positional access
+using MyVariant = std::variant<int, int, std::string, /* anonymous struct not supported */>;
+// Problem: Which int is which? Must use indices std::get<0>() vs std::get<1>()
 ```
 
 ## Interface
 
 The library generates both template and non-template versions of all methods:
 
-### Factory Methods
+### Construction
+
+#### In-place Construction
 
 ```cpp
-// Template version
-MyUnion u1 = MyUnion::create<MyUnion::tag_t::name>("hello");
+// Direct in-place construction using tag
+MyUnion u1(MyUnion::in_place_tag<MyUnion::tag_t::name>, "hello");
 
-// Non-template version  
-MyUnion u2 = MyUnion::create_name("hello");
+// Factory methods (recommended)
+MyUnion u2 = MyUnion::create<MyUnion::tag_t::name>("hello");  // Template version
+MyUnion u3 = MyUnion::create_name("hello");                   // Non-template version  
+```
+
+#### Emplace Methods
+
+```cpp
+// Template version - destroys current content and constructs new
+u.emplace<MyUnion::tag_t::value>(42);
+
+// Non-template version
+u.emplace_value(42);
 ```
 
 ### Access Methods
@@ -70,6 +91,27 @@ std::string& ref = u.get_ref<MyUnion::tag_t::name>();
 bool has_name = u.holds_name();
 std::string* ptr = u.get_name_ptr();
 std::string& ref = u.get_name_ref();
+```
+
+### Safety Considerations
+
+**Safe access methods:** `get_ptr()` and `get_*_ptr()` return `nullptr` if the union doesn't hold the requested type.
+
+**Unsafe access methods:** `get_ref()` and `get_*_ref()` provide direct access without safety checks. Using these with the wrong type results in undefined behavior.
+
+```cpp
+MyUnion u = MyUnion::create_name("hello");
+
+// Safe - returns nullptr if wrong type
+int* safe_ptr = u.get_index_ptr();  // Returns nullptr
+
+// Unsafe - undefined behavior if wrong type  
+int& unsafe_ref = u.get_index_ref();  // Undefined behavior!
+
+// Always check first when using get_ref
+if (u.holds_index()) {
+    int& safe_ref = u.get_index_ref();  // Safe
+}
 ```
 
 ## Pattern Matching
@@ -135,12 +177,12 @@ std::string s = MATCH(std::move(u), std::string
 | Feature | CppTaggedUnion | std::variant |
 |---------|----------------|--------------|
 | Data model | Algebraic data type with named variants | Type union with positional access |
-| Type reuse | Supports same type multiple times | Each type can appear only once |
-| Access syntax | Named methods: `get_name_ref()` | Positional access: `std::get<0>()` |
+| Type reuse | Supports same type multiple times with clear semantics | Same type multiple times requires positional indices |
+| Access syntax | Named methods: `get_name_ref()` | Positional access: `std::get<0>()` or `std::get<std::string>()` |
 | Pattern matching | Built-in `MATCH` macro + direct methods | Requires `std::visit` with complex syntax |
 | Anonymous structs | Supported inline | Not supported |
 | LSP integration | Automatic type inference in pattern matching | Manual type annotations required |
-| Readability | Self-documenting with semantic names | Requires external documentation |
+| Readability | Self-documenting with semantic names | Positional indices obscure meaning |
 
 ## Example: JSON Representation
 
@@ -162,12 +204,12 @@ if (json.holds_string()) {
     std::cout << json.get_string_ref() << std::endl;  // Clear intent
 }
 
-// With std::variant - positional and unclear
+// With std::variant - positional access obscures meaning
 using JsonVariant = std::variant<std::nullptr_t, bool, double, std::string, 
                                 std::vector<JsonVariant>, std::map<std::string, JsonVariant>>;
 
 auto json = JsonVariant{std::string("hello")};
 if (std::holds_alternative<std::string>(json)) {
-    std::cout << std::get<std::string>(json) << std::endl;  // What is index 3?
+    std::cout << std::get<std::string>(json) << std::endl;  // Which std::string variant?
 }
 ```
