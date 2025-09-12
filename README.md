@@ -1,14 +1,71 @@
 # CppTaggedUnion
 
-A C++ library providing algebraic data types through macro-generated tagged unions. Unlike std::variant which functions as a type union, this library creates true algebraic data types with named variants, offering superior readability and ease of use when the same type appears multiple times.
+A C++ library providing algebraic data types through macro-generated tagged unions with named variants and compile-time type safety.
 
-## Key Advantages
+## Motivation
 
-- **Algebraic data types** rather than simple type unions
-- **Named variants** for better code readability and self-documentation  
-- **Type reuse support** - same type can appear multiple times with different semantic meanings
+While C++ provides `std::variant` for sum types, it functions as a type union with positional access, leading to several limitations when building algebraic data types:
+
+### Problems with std::variant
+
+```cpp
+// std::variant approach - unclear and error-prone
+using MyVariant = std::variant<int, int, std::string>;
+MyVariant v1 = 0;        // Which int is this?
+MyVariant v2 = 42;       // Index or value?
+
+// Accessing requires knowing positions
+int first_int = std::get<0>(v);   // What does position 0 represent?
+int second_int = std::get<1>(v);  // What does position 1 represent?
+
+// Pattern matching is verbose
+std::visit([](auto&& value) {
+    using T = std::decay_t<decltype(value)>;
+    if constexpr (std::is_same_v<T, int>) {
+        // But which int variant is this?
+    }
+}, v);
+
+// Anonymous structs not supported
+// std::variant<struct { int x, y; }, int> // Error!
+```
+
+### CppTaggedUnion Solution
+
+```cpp
+// Clear semantic meaning with named variants
+UNION(MyUnion 
+    , (int, index)     // Same type, different meaning
+    , (int, value)     // Clear semantic distinction
+    , (std::string, name)
+    , (struct { int x; int y; }, point)  // Anonymous structs supported
+);
+
+// Self-documenting construction and access
+MyUnion u1 = MyUnion::create_index(0);    // Obviously an index
+MyUnion u2 = MyUnion::create_value(42);   // Obviously a value
+
+// Clear, safe access
+if (u.holds_index()) {
+    int idx = u.get_index_ref();  // Unambiguous intent
+}
+
+// Readable pattern matching
+std::string result = MATCH(u, std::string 
+    , CASE(index, idx, { return std::format("Index: {}", idx); })
+    , CASE(value, val, { return std::format("Value: {}", val); })
+    , CASE(name, n, { return std::format("Name: {}", n); })
+    , CASE(point, p, { return std::format("Point({}, {})", p.x, p.y); })
+);
+```
+
+### Key Advantages
+
+- **Algebraic data types** with named variants rather than positional type unions
+- **Type reuse support** - same type can appear multiple times with clear semantic distinctions
+- **Self-documenting code** - method names indicate variant meaning
 - **Anonymous struct support** - temporary structures can be defined inline
-- **LSP type inference** - modern language servers like clangd automatically infer variable types in pattern matching
+- **LSP type inference** - modern language servers automatically infer variable types in pattern matching
 - **Zero-cost abstractions** with compile-time type safety
 - **Header-only** implementation requiring only C++20
 
@@ -31,9 +88,7 @@ UNION(Result
 );
 ```
 
-### Type Reuse Example
-
-The same type can appear multiple times with different semantic meanings:
+### Basic Example
 
 ```cpp
 UNION(MyUnion 
@@ -43,13 +98,10 @@ UNION(MyUnion
     , (struct { int x; int y; }, point)  // Anonymous struct support
 );
 
-// Clear semantic access
+// Clear semantic construction
 MyUnion u1 = MyUnion::create_index(0);
 MyUnion u2 = MyUnion::create_value(42);
-
-// With std::variant, same types require positional access
-using MyVariant = std::variant<int, int, std::string, /* anonymous struct not supported */>;
-// Problem: Which int is which? Must use indices std::get<0>() vs std::get<1>()
+MyUnion u3 = MyUnion::create_point({10, 20});
 ```
 
 ## Interface
@@ -172,24 +224,11 @@ std::string s = MATCH(std::move(u), std::string
 );
 ```
 
-## Comparison with std::variant
-
-| Feature | CppTaggedUnion | std::variant |
-|---------|----------------|--------------|
-| Data model | Algebraic data type with named variants | Type union with positional access |
-| Type reuse | Supports same type multiple times with clear semantics | Same type multiple times requires positional indices |
-| Access syntax | Named methods: `get_name_ref()` | Positional access: `std::get<0>()` or `std::get<std::string>()` |
-| Pattern matching | Built-in `MATCH` macro + direct methods | Requires `std::visit` with complex syntax |
-| Anonymous structs | Supported inline | Not supported |
-| LSP integration | Automatic type inference in pattern matching | Manual type annotations required |
-| Readability | Self-documenting with semantic names | Positional indices obscure meaning |
-
 ## Example: JSON Representation
 
 This example demonstrates the advantages of algebraic data types:
 
 ```cpp
-// With CppTaggedUnion - clear semantic meaning
 UNION(JsonValue
     , (std::nullptr_t, null)
     , (bool, boolean) 
@@ -202,14 +241,5 @@ UNION(JsonValue
 auto json = JsonValue::create_string("hello");
 if (json.holds_string()) {
     std::cout << json.get_string_ref() << std::endl;  // Clear intent
-}
-
-// With std::variant - positional access obscures meaning
-using JsonVariant = std::variant<std::nullptr_t, bool, double, std::string, 
-                                std::vector<JsonVariant>, std::map<std::string, JsonVariant>>;
-
-auto json = JsonVariant{std::string("hello")};
-if (std::holds_alternative<std::string>(json)) {
-    std::cout << std::get<std::string>(json) << std::endl;  // Which std::string variant?
 }
 ```
