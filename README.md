@@ -34,7 +34,7 @@ std::visit([](auto&& value) {
 
 ```cpp
 // Clear semantic meaning with named variants
-UNION(MyUnion 
+UNION(MyUnion
     , (int, index)     // Same type, different meaning
     , (int, value)     // Clear semantic distinction
     , (std::string, name)
@@ -42,8 +42,8 @@ UNION(MyUnion
 );
 
 // Self-documenting construction and access
-MyUnion u1 = MyUnion::create_index(0);    // Obviously an index
-MyUnion u2 = MyUnion::create_value(42);   // Obviously a value
+auto u1 = MyUnion::create_index(0);    // Obviously an index
+auto u2 = MyUnion::create_value(42);   // Obviously a value
 
 // Clear, safe access
 if (u.holds_index()) {
@@ -51,7 +51,7 @@ if (u.holds_index()) {
 }
 
 // Readable pattern matching
-std::string result = MATCH(u, std::string 
+auto result = MATCH(std::string, u,
     , CASE(index, idx, { return std::format("Index: {}", idx); })
     , CASE(value, val, { return std::format("Value: {}", val); })
     , CASE(name, n, { return std::format("Name: {}", n); })
@@ -91,17 +91,59 @@ UNION(Result
 ### Basic Example
 
 ```cpp
-UNION(MyUnion 
-    , (int, index) 
-    , (int, value) 
-    , (std::string, name) 
+UNION(MyUnion
+    , (int, index)
+    , (int, value)
+    , (std::string, name)
     , (struct { int x; int y; }, point)  // Anonymous struct support
 );
 
 // Clear semantic construction
-MyUnion u1 = MyUnion::create_index(0);
-MyUnion u2 = MyUnion::create_value(42);
-MyUnion u3 = MyUnion::create_point({10, 20});
+auto u1 = MyUnion::create_index(0);
+auto u2 = MyUnion::create_value(42);
+auto u3 = MyUnion::create_point({10, 20});
+```
+
+### Template
+
+```cpp
+template<typename T>
+UNION(Option
+    , (T, some)
+    , (struct {}, none)
+);
+
+template<typename T, typename E = std::string>
+UNION(Result
+    , (T, success)
+    , (E, error)
+);
+
+// Usage
+auto o1 = Option<double>::create_some(3.14);
+auto r1 = Result<int>::create_success(100);
+```
+
+### Special Cases
+
+The library always generates copy/move constructors and assignment operators. Therefore, if any variant type is non-copyable or non-movable, you need to use a workaround:
+
+```cpp
+// This will NOT compile because std::unique_ptr is non-copyable, but the UNION macro
+// will always attempt to generate copy constructors and assignment operators.
+// UNION(NonCopyableUnion
+//     , (std::unique_ptr<int>, ptr)
+//     , (std::string, name)
+// );
+
+// To work around this, we define a template with a dummy parameter, so the compiler
+// will only complain about the missing copy operations when you call them explicitly.
+template<typename Dummy = void>
+UNION(NonCopyableUnionTemplate
+    , (std::unique_ptr<int>, ptr)
+    , (std::string, name)
+);
+using NonCopyableUnion = NonCopyableUnionTemplate<>;
 ```
 
 ## Interface
@@ -114,18 +156,18 @@ The library generates both template and non-template versions of all methods:
 
 ```cpp
 // Direct in-place construction using tag
-MyUnion u1(MyUnion::in_place_tag<MyUnion::tag_t::name>, "hello");
+MyUnion u1(tu::in_place_tag<MyUnion::tags::name>, "hello");
 
 // Factory methods (recommended)
-MyUnion u2 = MyUnion::create<MyUnion::tag_t::name>("hello");  // Template version
-MyUnion u3 = MyUnion::create_name("hello");                   // Non-template version  
+MyUnion u2 = MyUnion::create<MyUnion::tags::name>("hello");  // Template version
+MyUnion u3 = MyUnion::create_name("hello");                   // Non-template version 
 ```
 
 #### Emplace Methods
 
 ```cpp
 // Template version - destroys current content and constructs new
-u.emplace<MyUnion::tag_t::value>(42);
+u.emplace<MyUnion::tags::value>(42);
 
 // Non-template version
 u.emplace_value(42);
@@ -135,9 +177,9 @@ u.emplace_value(42);
 
 ```cpp
 // Template versions
-bool has_name = u.holds<MyUnion::tag_t::name>();
-std::string* ptr = u.get_ptr<MyUnion::tag_t::name>();
-std::string& ref = u.get_ref<MyUnion::tag_t::name>();
+bool has_name = u.holds<MyUnion::tags::name>();
+std::string* ptr = u.get_ptr<MyUnion::tags::name>();
+std::string& ref = u.get_ref<MyUnion::tags::name>();
 
 // Non-template versions
 bool has_name = u.holds_name();
@@ -157,7 +199,7 @@ MyUnion u = MyUnion::create_name("hello");
 // Safe - returns nullptr if wrong type
 int* safe_ptr = u.get_index_ptr();  // Returns nullptr
 
-// Unsafe - undefined behavior if wrong type  
+// Unsafe - undefined behavior if wrong type 
 int& unsafe_ref = u.get_index_ref();  // Undefined behavior!
 
 // Always check first when using get_ref
@@ -171,31 +213,16 @@ if (u.holds_index()) {
 ### Macro-based Pattern Matching
 
 ```cpp
-std::string result = MATCH(u, std::string 
-    , CASE(index, idx, { return std::format("Index: {}", idx); }) 
-    , CASE(value, val, { return std::format("Value: {}", val); }) 
-    , CASE(name, name, { return std::format("Name: {}", name); }) 
-    , CASE(point, point, { return std::format("Point({}, {})", point.x, point.y); }) 
+auto result = MATCH(std::string, u
+    , CASE(index, idx, { return std::format("Index: {}", idx); })
+    , CASE(value, val, { return std::format("Value: {}", val); })
+    , CASE(name, name, { return std::format("Name: {}", name); })
+    , CASE(point, point, { return std::format("Point({}, {})", point.x, point.y); })
     , OTHERWISE(x, { return "Unknown"; })
 );
 ```
 
 ### Direct Method Calls
-
-#### Using visit()
-
-```cpp
-std::string result = u.visit<std::string>([](auto tag, auto&& value) {
-    using tag_type = decltype(tag);
-    if constexpr (tag_type::value == MyUnion::tag_t::name) {
-        return std::format("Name: {}", value);
-    } else if constexpr (tag_type::value == MyUnion::tag_t::index) {
-        return std::format("Index: {}", value);
-    } else {
-        return std::string("Other");
-    }
-});
-```
 
 #### Using match()
 
@@ -209,13 +236,38 @@ struct Matcher {
 std::string result = u.match<std::string>(Matcher{});
 ```
 
+#### Using visit()
+
+```cpp
+std::string result = u.visit<std::string>([](auto tag, auto&& value) {
+    using tag_type = decltype(tag);
+    if constexpr (tag_type::value == MyUnion::tags::name) {
+        return std::format("Name: {}", value);
+    } else if constexpr (tag_type::value == MyUnion::tags::index) {
+        return std::format("Index: {}", value);
+    } else {
+        return std::string("Other");
+    }
+});
+```
+
+### Exhaustiveness Checking
+
+The pattern matching constructs enforce exhaustiveness at compile-time. Therefore, at least one of the following conditions must be met:
+
+- All of the union's variants are covered by `CASE(...)` / `case_<tag>(...)` / specific visitor methods;
+- An `OTHERWISE(...)` / `otherwise(...)` / default visitor method is provided;
+- The return type of the pattern matching expression is `void`.
+
+Otherwise, a compile-time error will occur.
+
 ## LSP Type Inference
 
 Modern language servers like clangd automatically infer types in pattern matching:
 
 ```cpp
 MyUnion const&& u = ...;
-std::string s = MATCH(std::move(u), std::string 
+auto s = MATCH(std::string, std::move(u)
     , CASE(index, idx, { return std::format("Index: {}", idx); })  // idx inferred as int const&&
     , CASE(value, val, { return std::format("Value: {}", val); })  // val inferred as int const&&
     , CASE(name, name, { return std::format("Name: {}", name); })  // name inferred as std::string const&&
@@ -229,13 +281,18 @@ std::string s = MATCH(std::move(u), std::string
 This example demonstrates the advantages of algebraic data types:
 
 ```cpp
+struct JsonValue;
+
+using JsonArray = std::vector<JsonValue>;
+using JsonObject = std::map<std::string, JsonValue>;
+
 UNION(JsonValue
     , (std::nullptr_t, null)
-    , (bool, boolean) 
+    , (bool, boolean)
     , (double, number)
     , (std::string, string)
-    , (std::vector<JsonValue>, array)
-    , (std::map<std::string, JsonValue>, object)
+    , (JsonArray, array)
+    , (JsonObject, object)
 );
 
 auto json = JsonValue::create_string("hello");

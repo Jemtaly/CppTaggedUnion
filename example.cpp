@@ -2,6 +2,8 @@
 
 #include <string>
 #include <format>
+#include <iostream>
+#include <cassert>
 
 UNION(MyUnion
     , (int, index)
@@ -39,23 +41,25 @@ int main() {
     assert(u.get_point_ptr() != nullptr);
     assert(u.get_value_ptr() == nullptr);
 
-    int a = MATCH(u, int
+    MATCH(void, u
+        , CASE(name, name, { std::cout << "Name: " << name << std::endl; })
+        , CASE(index, idx, { std::cout << "Index: " << idx << std::endl; })
+    );
+
+    auto a = MATCH(int, u
         , CASE(index, idx, { return idx; })
         , CASE(value, val, { return val; })
         , CASE(name, name, { return name.size(); })
         , CASE(point, point, { return point.x + point.y; })
-        , OTHERWISE(_, { return -1; })
     );
     assert(a == 30);
 
-    std::string s = MATCH(std::move(u), std::string
+    auto s = MATCH(std::string, std::move(u)
         , CASE(index, idx, { return std::format("Index: {}", idx); })
         , CASE(value, val, { return std::format("Value: {}", val); })
-        , CASE(name, name, { return std::format("Name: {}", name); })
-        , CASE(point, point, { return std::format("Point({}, {})", point.x, point.y); })
-        , OTHERWISE(_, { return "Unknown"; })
+        , OTHERWISE(_, { return "Unsupported variant"; })
     );
-    assert(s == "Point(10, 20)");
+    assert(s == "Unsupported variant");
 
     return 0;
 }
