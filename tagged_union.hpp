@@ -65,20 +65,6 @@
         std::destroy_at(std::addressof(this->m_storage.field_name)); \
         break;
 
-#define UNION_CONSTRUCT_IF_ELSE(mems, args) UNION_CONSTRUCT_IF_ELSE_CALL((UNPACK mems, UNPACK args))
-#define UNION_CONSTRUCT_IF_ELSE_CALL(sums) UNION_CONSTRUCT_IF_ELSE_IMPL sums
-#define UNION_CONSTRUCT_IF_ELSE_IMPL(type_name, field_type, field_name)                                                 \
-    if constexpr (tag == tag_t::field_name) {                                                                           \
-        new (std::addressof(this->m_storage.field_name)) alternative_t<tag_t::field_name>(std::forward<Args>(args)...); \
-    } else
-
-#define UNION_GET_PTR_IF_ELSE(mems, args) UNION_GET_PTR_IF_ELSE_CALL((UNPACK mems, UNPACK args))
-#define UNION_GET_PTR_IF_ELSE_CALL(sums) UNION_GET_PTR_IF_ELSE_IMPL sums
-#define UNION_GET_PTR_IF_ELSE_IMPL(type_name, field_type, field_name) \
-    if constexpr (tag == tag_t::field_name) {                         \
-        return m_tag == tag ? &this->m_storage.field_name : nullptr;  \
-    } else
-
 #define UNION_GET_LVALUE_REF_IF_ELSE(mems, args) UNION_GET_LVALUE_REF_IF_ELSE_CALL((UNPACK mems, UNPACK args))
 #define UNION_GET_LVALUE_REF_IF_ELSE_CALL(sums) UNION_GET_LVALUE_REF_IF_ELSE_IMPL sums
 #define UNION_GET_LVALUE_REF_IF_ELSE_IMPL(type_name, field_type, field_name) \
@@ -95,43 +81,53 @@
 
 #define UNION_SPECIFIC_METHOD(mems, args) UNION_SPECIFIC_METHOD_CALL((UNPACK mems, UNPACK args))
 #define UNION_SPECIFIC_METHOD_CALL(sums) UNION_SPECIFIC_METHOD_IMPL sums
-#define UNION_SPECIFIC_METHOD_IMPL(type_name, field_type, field_name)            \
-    template<typename... Args>                                                   \
-    static type_name create_##field_name(Args &&...args) {                       \
-        return create<tag_t::field_name>(std::forward<Args>(args)...);           \
-    }                                                                            \
-                                                                                 \
-    template<typename... Args>                                                   \
-    alternative_t<tag_t::field_name> &emplace_##field_name(Args &&...args) {     \
-        return emplace<tag_t::field_name>(std::forward<Args>(args)...);          \
-    }                                                                            \
-                                                                                 \
-    alternative_t<tag_t::field_name> *get_##field_name##_ptr() {                 \
-        return this->get_ptr<tag_t::field_name>();                               \
-    }                                                                            \
-                                                                                 \
-    alternative_t<tag_t::field_name> const *get_##field_name##_ptr() const {     \
-        return this->get_ptr<tag_t::field_name>();                               \
-    }                                                                            \
-                                                                                 \
-    alternative_t<tag_t::field_name> &get_##field_name##_ref() & {               \
-        return (*this).template get_ref<tag_t::field_name>();                    \
-    }                                                                            \
-                                                                                 \
-    alternative_t<tag_t::field_name> const &get_##field_name##_ref() const & {   \
-        return (*this).template get_ref<tag_t::field_name>();                    \
-    }                                                                            \
-                                                                                 \
-    alternative_t<tag_t::field_name> &&get_##field_name##_ref() && {             \
-        return std::move(*this).template get_ref<tag_t::field_name>();           \
-    }                                                                            \
-                                                                                 \
-    alternative_t<tag_t::field_name> const &&get_##field_name##_ref() const && { \
-        return std::move(*this).template get_ref<tag_t::field_name>();           \
-    }                                                                            \
-                                                                                 \
-    bool holds_##field_name() const {                                            \
-        return holds<tag_t::field_name>();                                       \
+#define UNION_SPECIFIC_METHOD_IMPL(type_name, field_type, field_name)                       \
+    template<typename... Args>                                                              \
+    type_name(tu::in_place_tag_t<tag_t::field_name>, Args &&...args)                        \
+        : m_tag(tag_t::field_name) {                                                        \
+        new (std::addressof(this->m_storage.field_name))                                    \
+            alternative_t<tag_t::field_name>(std::forward<Args>(args)...);                  \
+    }                                                                                       \
+                                                                                            \
+    bool holds_##field_name() const {                                                       \
+        return holds<tag_t::field_name>();                                                  \
+    }                                                                                       \
+                                                                                            \
+    alternative_t<tag_t::field_name> &get_##field_name##_ref() & {                          \
+        return (*this).m_storage.field_name;                                                \
+    }                                                                                       \
+                                                                                            \
+    alternative_t<tag_t::field_name> const &get_##field_name##_ref() const & {              \
+        return (*this).m_storage.field_name;                                                \
+    }                                                                                       \
+                                                                                            \
+    alternative_t<tag_t::field_name> &&get_##field_name##_ref() && {                        \
+        return std::move(*this).m_storage.field_name;                                       \
+    }                                                                                       \
+                                                                                            \
+    alternative_t<tag_t::field_name> const &&get_##field_name##_ref() const && {            \
+        return std::move(*this).m_storage.field_name;                                       \
+    }                                                                                       \
+                                                                                            \
+    alternative_t<tag_t::field_name> *get_##field_name##_ptr() {                            \
+        return holds_##field_name() ? &get_##field_name##_ref() : nullptr;                  \
+    }                                                                                       \
+                                                                                            \
+    alternative_t<tag_t::field_name> const *get_##field_name##_ptr() const {                \
+        return holds_##field_name() ? &get_##field_name##_ref() : nullptr;                  \
+    }                                                                                       \
+                                                                                            \
+    template<typename... Args>                                                              \
+    static type_name create_##field_name(Args &&...args) {                                  \
+        return type_name(tu::in_place_tag<tag_t::field_name>, std::forward<Args>(args)...); \
+    }                                                                                       \
+                                                                                            \
+    template<typename... Args>                                                              \
+    alternative_t<tag_t::field_name> &emplace_##field_name(Args &&...args) {                \
+        this->~type_name();                                                                 \
+        new (this)                                                                          \
+            type_name(tu::in_place_tag<tag_t::field_name>, std::forward<Args>(args)...);    \
+        return get_##field_name##_ref();                                                    \
     }
 
 #define UNION_VISIT_LVALUE_REF_CASE_EXPR(field_name) std::forward<Visitor>(visitor)(tu::in_place_tag<tag_t::field_name>, (*this).m_storage.field_name)
@@ -270,37 +266,9 @@
             return *this;                                                                          \
         }                                                                                          \
                                                                                                    \
-        template<tag_t tag, typename... Args>                                                      \
-        type_name(tu::in_place_tag_t<tag>, Args &&...args) : m_tag(tag) {                          \
-            FOR_EACH(UNION_CONSTRUCT_IF_ELSE, (type_name), __VA_ARGS__) {                          \
-                assert(false && "bad tag");                                                        \
-            }                                                                                      \
-        }                                                                                          \
-                                                                                                   \
-        template<tag_t tag, typename... Args>                                                      \
-        static type_name create(Args &&...args) {                                                  \
-            return type_name(tu::in_place_tag<tag>, std::forward<Args>(args)...);                  \
-        }                                                                                          \
-                                                                                                   \
-        template<tag_t tag, typename... Args>                                                      \
-        alternative_t<tag> &emplace(Args &&...args) {                                              \
-            this->~type_name();                                                                    \
-            new (this) type_name(tu::in_place_tag<tag>, std::forward<Args>(args)...);              \
-            return get_ref<tag>();                                                                 \
-        }                                                                                          \
-                                                                                                   \
         template<tag_t tag>                                                                        \
-        alternative_t<tag> *get_ptr() {                                                            \
-            FOR_EACH(UNION_GET_PTR_IF_ELSE, (type_name), __VA_ARGS__) {                            \
-                static_assert(tag != tag, "bad tag");                                              \
-            }                                                                                      \
-        }                                                                                          \
-                                                                                                   \
-        template<tag_t tag>                                                                        \
-        alternative_t<tag> const *get_ptr() const {                                                \
-            FOR_EACH(UNION_GET_PTR_IF_ELSE, (type_name), __VA_ARGS__) {                            \
-                static_assert(tag != tag, "bad tag");                                              \
-            }                                                                                      \
+        bool holds() const {                                                                       \
+            return m_tag == tag;                                                                   \
         }                                                                                          \
                                                                                                    \
         template<tag_t tag>                                                                        \
@@ -332,8 +300,25 @@
         }                                                                                          \
                                                                                                    \
         template<tag_t tag>                                                                        \
-        bool holds() const {                                                                       \
-            return m_tag == tag;                                                                   \
+        alternative_t<tag> *get_ptr() {                                                            \
+            return holds<tag>() ? &get_ref<tag>() : nullptr;                                       \
+        }                                                                                          \
+                                                                                                   \
+        template<tag_t tag>                                                                        \
+        alternative_t<tag> const *get_ptr() const {                                                \
+            return holds<tag>() ? &get_ref<tag>() : nullptr;                                       \
+        }                                                                                          \
+                                                                                                   \
+        template<tag_t tag, typename... Args>                                                      \
+        static type_name create(Args &&...args) {                                                  \
+            return type_name(tu::in_place_tag<tag>, std::forward<Args>(args)...);                  \
+        }                                                                                          \
+                                                                                                   \
+        template<tag_t tag, typename... Args>                                                      \
+        alternative_t<tag> &emplace(Args &&...args) {                                              \
+            this->~type_name();                                                                    \
+            new (this) type_name(tu::in_place_tag<tag>, std::forward<Args>(args)...);              \
+            return get_ref<tag>();                                                                 \
         }                                                                                          \
                                                                                                    \
         FOR_EACH(UNION_SPECIFIC_METHOD, (type_name), __VA_ARGS__)                                  \
