@@ -42,40 +42,40 @@ int main() {
     assert(u.get_value_ptr() == nullptr);
 
     MATCH(void, u
-        , CASE(name, name,
+        , CASE(name, name, {
             std::cout << "Name: " << name << std::endl;
-        )
-        , CASE(index, idx,
+        })
+        , CASE(index, idx, {
             std::cout << "Index: " << idx << std::endl;
-        )
+        })
     );
 
     auto a = MATCH(int, u
-        , CASE(index, idx,
+        , CASE(index, idx, {
             return idx;
-        )
-        , CASE(value, val,
+        })
+        , CASE(value, val, {
             return val;
-        )
-        , CASE(name, name,
+        })
+        , CASE(name, name, {
             return name.size();
-        )
-        , CASE(point, point,
+        })
+        , CASE(point, point, {
             return point.x + point.y;
-        )
+        })
     );
     assert(a == 30);
 
     auto s = MATCH(std::string, std::move(u)
-        , CASE(index, idx,
+        , CASE(index, idx, {
             return std::format("Index: {}", idx);
-        )
-        , CASE(value, val,
+        })
+        , CASE(value, val, {
             return std::format("Value: {}", val);
-        )
-        , OTHERWISE(_,
+        })
+        , OTHERWISE(_, {
             return "Unsupported variant";
-        )
+        })
     );
     assert(s == "Unsupported variant");
 
