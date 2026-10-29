@@ -6,10 +6,10 @@
 #include <cassert>
 
 UNION(MyUnion
-    , (int, index)
-    , (int, value)
-    , (std::string, name)
-    , (struct { int x; int y; }, point)
+    , FIELD(int, index)
+    , FIELD(int, value)
+    , FIELD(std::string, name)
+    , FIELD(struct { int x; int y; }, point)
 );
 
 int main() {

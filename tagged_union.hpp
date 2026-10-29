@@ -415,6 +415,7 @@
             }                                                                                      \
         }                                                                                          \
     }
+#define FIELD(field_type, field_name) (field_type, field_name)
 
 // Pattern matching implementation
 

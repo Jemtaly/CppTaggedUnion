@@ -35,10 +35,10 @@ std::visit([](auto&& value) {
 ```cpp
 // Clear semantic meaning with named variants
 UNION(MyUnion
-    , (int, index)     // Same type, different meaning
-    , (int, value)     // Clear semantic distinction
-    , (std::string, name)
-    , (struct { int x; int y; }, point)  // Anonymous structs supported
+    , FIELD(int, index)     // Same type, different meaning
+    , FIELD(int, value)     // Clear semantic distinction
+    , FIELD(std::string, name)
+    , FIELD(struct { int x; int y; }, point)  // Anonymous structs supported
 );
 
 // Self-documenting construction and access
@@ -83,8 +83,8 @@ auto result = MATCH(std::string, u,
 #include <string>
 
 UNION(Result
-    , (int, success)
-    , (std::string, error)
+    , FIELD(int, success)
+    , FIELD(std::string, error)
 );
 ```
 
@@ -92,10 +92,10 @@ UNION(Result
 
 ```cpp
 UNION(MyUnion
-    , (int, index)
-    , (int, value)
-    , (std::string, name)
-    , (struct { int x; int y; }, point)  // Anonymous struct support
+    , FIELD(int, index)
+    , FIELD(int, value)
+    , FIELD(std::string, name)
+    , FIELD(struct { int x; int y; }, point)  // Anonymous struct support
 );
 
 // Clear semantic construction
@@ -109,14 +109,14 @@ auto u3 = MyUnion::create_point({10, 20});
 ```cpp
 template<typename T>
 UNION(Option
-    , (T, some)
-    , (struct {}, none)
+    , FIELD(T, some)
+    , FIELD(struct {}, none)
 );
 
 template<typename T, typename E = std::string>
 UNION(Result
-    , (T, success)
-    , (E, error)
+    , FIELD(T, success)
+    , FIELD(E, error)
 );
 
 // Usage
@@ -140,8 +140,8 @@ The library always generates copy/move constructors and assignment operators. Th
 // will only complain about the missing copy operations when you call them explicitly.
 template<typename Dummy = void>
 UNION(NonCopyableUnionTemplate
-    , (std::unique_ptr<int>, ptr)
-    , (std::string, name)
+    , FIELD(std::unique_ptr<int>, ptr)
+    , FIELD(std::string, name)
 );
 using NonCopyableUnion = NonCopyableUnionTemplate<>;
 ```
@@ -287,12 +287,12 @@ using JsonArray = std::vector<JsonValue>;
 using JsonObject = std::map<std::string, JsonValue>;
 
 UNION(JsonValue
-    , (std::nullptr_t, null)
-    , (bool, boolean)
-    , (double, number)
-    , (std::string, string)
-    , (JsonArray, array)
-    , (JsonObject, object)
+    , FIELD(std::monostate, null)
+    , FIELD(bool, boolean)
+    , FIELD(double, number)
+    , FIELD(std::string, string)
+    , FIELD(JsonArray, array)
+    , FIELD(JsonObject, object)
 );
 
 auto json = JsonValue::create_string("hello");
