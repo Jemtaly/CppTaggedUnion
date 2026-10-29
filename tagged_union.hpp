@@ -75,18 +75,11 @@
         std::destroy_at(std::addressof(this->m_storage.field_name)); \
         break;
 
-#define UNION_GET_LVALUE_REF_IF_ELSE(union_info, field_info) UNION_GET_LVALUE_REF_IF_ELSE_CALL((UNPACK(union_info), UNPACK(field_info)))
-#define UNION_GET_LVALUE_REF_IF_ELSE_CALL(concatenated_info) UNION_GET_LVALUE_REF_IF_ELSE_IMPL concatenated_info
-#define UNION_GET_LVALUE_REF_IF_ELSE_IMPL(type_name, field_type, field_name) \
-    if constexpr (tag == tag_t::field_name) {                                \
-        return (*this).m_storage.field_name;                                 \
-    } else
-
-#define UNION_GET_RVALUE_REF_IF_ELSE(union_info, field_info) UNION_GET_RVALUE_REF_IF_ELSE_CALL((UNPACK(union_info), UNPACK(field_info)))
-#define UNION_GET_RVALUE_REF_IF_ELSE_CALL(concatenated_info) UNION_GET_RVALUE_REF_IF_ELSE_IMPL concatenated_info
-#define UNION_GET_RVALUE_REF_IF_ELSE_IMPL(type_name, field_type, field_name) \
-    if constexpr (tag == tag_t::field_name) {                                \
-        return std::move(*this).m_storage.field_name;                        \
+#define UNION_GET_REF_IF_ELSE(union_info, field_info) UNION_GET_REF_IF_ELSE_CALL((UNPACK(union_info), UNPACK(field_info)))
+#define UNION_GET_REF_IF_ELSE_CALL(concatenated_info) UNION_GET_REF_IF_ELSE_IMPL concatenated_info
+#define UNION_GET_REF_IF_ELSE_IMPL(type_name, field_type, field_name) \
+    if constexpr (tag == tag_t::field_name) {                         \
+        return std::forward<Self>(self).get_##field_name##_ref();     \
     } else
 
 #define UNION_SPECIFIC_METHOD(union_info, field_info) UNION_SPECIFIC_METHOD_CALL((UNPACK(union_info), UNPACK(field_info)))
@@ -103,28 +96,14 @@
         return holds<tag_t::field_name>();                                                  \
     }                                                                                       \
                                                                                             \
-    alternative_t<tag_t::field_name> &get_##field_name##_ref() & {                          \
-        return (*this).m_storage.field_name;                                                \
+    template<typename Self>                                                                 \
+    auto &&get_##field_name##_ref(this Self &&self) {                                       \
+        return std::forward<Self>(self).m_storage.field_name;                               \
     }                                                                                       \
                                                                                             \
-    alternative_t<tag_t::field_name> const &get_##field_name##_ref() const & {              \
-        return (*this).m_storage.field_name;                                                \
-    }                                                                                       \
-                                                                                            \
-    alternative_t<tag_t::field_name> &&get_##field_name##_ref() && {                        \
-        return std::move(*this).m_storage.field_name;                                       \
-    }                                                                                       \
-                                                                                            \
-    alternative_t<tag_t::field_name> const &&get_##field_name##_ref() const && {            \
-        return std::move(*this).m_storage.field_name;                                       \
-    }                                                                                       \
-                                                                                            \
-    alternative_t<tag_t::field_name> *get_##field_name##_ptr() {                            \
-        return holds_##field_name() ? &get_##field_name##_ref() : nullptr;                  \
-    }                                                                                       \
-                                                                                            \
-    alternative_t<tag_t::field_name> const *get_##field_name##_ptr() const {                \
-        return holds_##field_name() ? &get_##field_name##_ref() : nullptr;                  \
+    template<typename Self>                                                                 \
+    auto *get_##field_name##_ptr(this Self &self) {                                         \
+        return self.holds_##field_name() ? &self.get_##field_name##_ref() : nullptr;        \
     }                                                                                       \
                                                                                             \
     template<typename... Args>                                                              \
@@ -133,297 +112,169 @@
     }                                                                                       \
                                                                                             \
     template<typename... Args>                                                              \
-    alternative_t<tag_t::field_name> &emplace_##field_name(Args &&...args) {                \
+    alternative_t<tag_t::field_name> &emplace_##field_name(Args &&...args) & {              \
         this->~type_name();                                                                 \
         new (this)                                                                          \
             type_name(tu::in_place_tag<tag_t::field_name>, std::forward<Args>(args)...);    \
         return get_##field_name##_ref();                                                    \
     }
 
-#define UNION_VISIT_LVALUE_REF_CASE_EXPR(field_name) std::forward<Visitor>(visitor)(tu::in_place_tag<tag_t::field_name>, (*this).m_storage.field_name)
-#define UNION_VISIT_LVALUE_REF_OTHERWISE_EXPR std::forward<Visitor>(visitor)((*this))
-#define UNION_VISIT_LVALUE_REF_HAS_CASE_AND(union_info, field_info) UNION_VISIT_LVALUE_REF_HAS_CASE_AND_CALL((UNPACK(union_info), UNPACK(field_info)))
-#define UNION_VISIT_LVALUE_REF_HAS_CASE_AND_CALL(concatenated_info) UNION_VISIT_LVALUE_REF_HAS_CASE_AND_IMPL concatenated_info
-#define UNION_VISIT_LVALUE_REF_HAS_CASE_AND_IMPL(type_name, field_type, field_name) \
-    (requires { { UNION_VISIT_LVALUE_REF_CASE_EXPR(field_name) } -> std::convertible_to<ReturnType>; } || !requires { UNION_VISIT_LVALUE_REF_CASE_EXPR(field_name); } && (requires { { UNION_VISIT_LVALUE_REF_OTHERWISE_EXPR } -> std::convertible_to<ReturnType>; } || !requires { UNION_VISIT_LVALUE_REF_OTHERWISE_EXPR; } && std::same_as<ReturnType, void>)) &&
-#define UNION_VISIT_LVALUE_REF_CASE(union_info, field_info) UNION_VISIT_LVALUE_REF_CASE_CALL((UNPACK(union_info), UNPACK(field_info)))
-#define UNION_VISIT_LVALUE_REF_CASE_CALL(concatenated_info) UNION_VISIT_LVALUE_REF_CASE_IMPL concatenated_info
-#define UNION_VISIT_LVALUE_REF_CASE_IMPL(type_name, field_type, field_name)         \
-    case tag_t::field_name:                                                         \
-        if constexpr (requires { UNION_VISIT_LVALUE_REF_CASE_EXPR(field_name); }) { \
-            return UNION_VISIT_LVALUE_REF_CASE_EXPR(field_name);                    \
-        } else if constexpr (requires { UNION_VISIT_LVALUE_REF_OTHERWISE_EXPR; }) { \
-            return UNION_VISIT_LVALUE_REF_OTHERWISE_EXPR;                           \
-        } else {                                                                    \
-            return;                                                                 \
+#define UNION_VISIT_CASE_EXPR(field_name) std::forward<Visitor>(visitor)(tu::in_place_tag<tag_t::field_name>, std::forward<Self>(self).m_storage.field_name)
+#define UNION_VISIT_OTHERWISE_EXPR std::forward<Visitor>(visitor)(std::forward<Self>(self))
+#define UNION_VISIT_HAS_CASE_AND(union_info, field_info) UNION_VISIT_HAS_CASE_AND_CALL((UNPACK(union_info), UNPACK(field_info)))
+#define UNION_VISIT_HAS_CASE_AND_CALL(concatenated_info) UNION_VISIT_HAS_CASE_AND_IMPL concatenated_info
+#define UNION_VISIT_HAS_CASE_AND_IMPL(type_name, field_type, field_name) \
+    (requires { { UNION_VISIT_CASE_EXPR(field_name) } -> std::convertible_to<ReturnType>; } || !requires { UNION_VISIT_CASE_EXPR(field_name); } && (requires { { UNION_VISIT_OTHERWISE_EXPR } -> std::convertible_to<ReturnType>; } || !requires { UNION_VISIT_OTHERWISE_EXPR; } && std::same_as<ReturnType, void>)) &&
+#define UNION_VISIT_CASE(union_info, field_info) UNION_VISIT_CASE_CALL((UNPACK(union_info), UNPACK(field_info)))
+#define UNION_VISIT_CASE_CALL(concatenated_info) UNION_VISIT_CASE_IMPL concatenated_info
+#define UNION_VISIT_CASE_IMPL(type_name, field_type, field_name)         \
+    case tag_t::field_name:                                              \
+        if constexpr (requires { UNION_VISIT_CASE_EXPR(field_name); }) { \
+            return UNION_VISIT_CASE_EXPR(field_name);                    \
+        } else if constexpr (requires { UNION_VISIT_OTHERWISE_EXPR; }) { \
+            return UNION_VISIT_OTHERWISE_EXPR;                           \
+        } else {                                                         \
+            return;                                                      \
         }
 
-#define UNION_VISIT_RVALUE_REF_CASE_EXPR(field_name) std::forward<Visitor>(visitor)(tu::in_place_tag<tag_t::field_name>, std::move(*this).m_storage.field_name)
-#define UNION_VISIT_RVALUE_REF_OTHERWISE_EXPR std::forward<Visitor>(visitor)(std::move(*this))
-#define UNION_VISIT_RVALUE_REF_HAS_CASE_AND(union_info, field_info) UNION_VISIT_RVALUE_REF_HAS_CASE_AND_CALL((UNPACK(union_info), UNPACK(field_info)))
-#define UNION_VISIT_RVALUE_REF_HAS_CASE_AND_CALL(concatenated_info) UNION_VISIT_RVALUE_REF_HAS_CASE_AND_IMPL concatenated_info
-#define UNION_VISIT_RVALUE_REF_HAS_CASE_AND_IMPL(type_name, field_type, field_name) \
-    (requires { { UNION_VISIT_RVALUE_REF_CASE_EXPR(field_name) } -> std::convertible_to<ReturnType>; } || !requires { UNION_VISIT_RVALUE_REF_CASE_EXPR(field_name); } && (requires { { UNION_VISIT_RVALUE_REF_OTHERWISE_EXPR } -> std::convertible_to<ReturnType>; } || !requires { UNION_VISIT_RVALUE_REF_OTHERWISE_EXPR; } && std::same_as<ReturnType, void>)) &&
-#define UNION_VISIT_RVALUE_REF_CASE(union_info, field_info) UNION_VISIT_RVALUE_REF_CASE_CALL((UNPACK(union_info), UNPACK(field_info)))
-#define UNION_VISIT_RVALUE_REF_CASE_CALL(concatenated_info) UNION_VISIT_RVALUE_REF_CASE_IMPL concatenated_info
-#define UNION_VISIT_RVALUE_REF_CASE_IMPL(type_name, field_type, field_name)         \
-    case tag_t::field_name:                                                         \
-        if constexpr (requires { UNION_VISIT_RVALUE_REF_CASE_EXPR(field_name); }) { \
-            return UNION_VISIT_RVALUE_REF_CASE_EXPR(field_name);                    \
-        } else if constexpr (requires { UNION_VISIT_RVALUE_REF_OTHERWISE_EXPR; }) { \
-            return UNION_VISIT_RVALUE_REF_OTHERWISE_EXPR;                           \
-        } else {                                                                    \
-            return;                                                                 \
+#define UNION_MATCH_CASE_EXPR(field_name) std::forward<Matcher>(matcher).case_##field_name(std::forward<Self>(self).m_storage.field_name)
+#define UNION_MATCH_OTHERWISE_EXPR std::forward<Matcher>(matcher).otherwise(std::forward<Self>(self))
+#define UNION_MATCH_HAS_CASE_AND(union_info, field_info) UNION_MATCH_HAS_CASE_AND_CALL((UNPACK(union_info), UNPACK(field_info)))
+#define UNION_MATCH_HAS_CASE_AND_CALL(concatenated_info) UNION_MATCH_HAS_CASE_AND_IMPL concatenated_info
+#define UNION_MATCH_HAS_CASE_AND_IMPL(type_name, field_type, field_name) \
+    (requires { { UNION_MATCH_CASE_EXPR(field_name) } -> std::convertible_to<ReturnType>; } || !requires { UNION_MATCH_CASE_EXPR(field_name); } && (requires { { UNION_MATCH_OTHERWISE_EXPR } -> std::convertible_to<ReturnType>; } || !requires { UNION_MATCH_OTHERWISE_EXPR; } && std::same_as<ReturnType, void>)) &&
+#define UNION_MATCH_CASE(union_info, field_info) UNION_MATCH_CASE_CALL((UNPACK(union_info), UNPACK(field_info)))
+#define UNION_MATCH_CASE_CALL(concatenated_info) UNION_MATCH_CASE_IMPL concatenated_info
+#define UNION_MATCH_CASE_IMPL(type_name, field_type, field_name)         \
+    case tag_t::field_name:                                              \
+        if constexpr (requires { UNION_MATCH_CASE_EXPR(field_name); }) { \
+            return UNION_MATCH_CASE_EXPR(field_name);                    \
+        } else if constexpr (requires { UNION_MATCH_OTHERWISE_EXPR; }) { \
+            return UNION_MATCH_OTHERWISE_EXPR;                           \
+        } else {                                                         \
+            return;                                                      \
         }
 
-#define UNION_MATCH_LVALUE_REF_CASE_EXPR(field_name) std::forward<Matcher>(matcher).case_##field_name((*this).m_storage.field_name)
-#define UNION_MATCH_LVALUE_REF_OTHERWISE_EXPR std::forward<Matcher>(matcher).otherwise((*this))
-#define UNION_MATCH_LVALUE_REF_HAS_CASE_AND(union_info, field_info) UNION_MATCH_LVALUE_REF_HAS_CASE_AND_CALL((UNPACK(union_info), UNPACK(field_info)))
-#define UNION_MATCH_LVALUE_REF_HAS_CASE_AND_CALL(concatenated_info) UNION_MATCH_LVALUE_REF_HAS_CASE_AND_IMPL concatenated_info
-#define UNION_MATCH_LVALUE_REF_HAS_CASE_AND_IMPL(type_name, field_type, field_name) \
-    (requires { { UNION_MATCH_LVALUE_REF_CASE_EXPR(field_name) } -> std::convertible_to<ReturnType>; } || !requires { UNION_MATCH_LVALUE_REF_CASE_EXPR(field_name); } && (requires { { UNION_MATCH_LVALUE_REF_OTHERWISE_EXPR } -> std::convertible_to<ReturnType>; } || !requires { UNION_MATCH_LVALUE_REF_OTHERWISE_EXPR; } && std::same_as<ReturnType, void>)) &&
-#define UNION_MATCH_LVALUE_REF_CASE(union_info, field_info) UNION_MATCH_LVALUE_REF_CASE_CALL((UNPACK(union_info), UNPACK(field_info)))
-#define UNION_MATCH_LVALUE_REF_CASE_CALL(concatenated_info) UNION_MATCH_LVALUE_REF_CASE_IMPL concatenated_info
-#define UNION_MATCH_LVALUE_REF_CASE_IMPL(type_name, field_type, field_name)         \
-    case tag_t::field_name:                                                         \
-        if constexpr (requires { UNION_MATCH_LVALUE_REF_CASE_EXPR(field_name); }) { \
-            return UNION_MATCH_LVALUE_REF_CASE_EXPR(field_name);                    \
-        } else if constexpr (requires { UNION_MATCH_LVALUE_REF_OTHERWISE_EXPR; }) { \
-            return UNION_MATCH_LVALUE_REF_OTHERWISE_EXPR;                           \
-        } else {                                                                    \
-            return;                                                                 \
-        }
-
-#define UNION_MATCH_RVALUE_REF_CASE_EXPR(field_name) std::forward<Matcher>(matcher).case_##field_name(std::move(*this).m_storage.field_name)
-#define UNION_MATCH_RVALUE_REF_OTHERWISE_EXPR std::forward<Matcher>(matcher).otherwise(std::move(*this))
-#define UNION_MATCH_RVALUE_REF_HAS_CASE_AND(union_info, field_info) UNION_MATCH_RVALUE_REF_HAS_CASE_AND_CALL((UNPACK(union_info), UNPACK(field_info)))
-#define UNION_MATCH_RVALUE_REF_HAS_CASE_AND_CALL(concatenated_info) UNION_MATCH_RVALUE_REF_HAS_CASE_AND_IMPL concatenated_info
-#define UNION_MATCH_RVALUE_REF_HAS_CASE_AND_IMPL(type_name, field_type, field_name) \
-    (requires { { UNION_MATCH_RVALUE_REF_CASE_EXPR(field_name) } -> std::convertible_to<ReturnType>; } || !requires { UNION_MATCH_RVALUE_REF_CASE_EXPR(field_name); } && (requires { { UNION_MATCH_RVALUE_REF_OTHERWISE_EXPR } -> std::convertible_to<ReturnType>; } || !requires { UNION_MATCH_RVALUE_REF_OTHERWISE_EXPR; } && std::same_as<ReturnType, void>)) &&
-#define UNION_MATCH_RVALUE_REF_CASE(union_info, field_info) UNION_MATCH_RVALUE_REF_CASE_CALL((UNPACK(union_info), UNPACK(field_info)))
-#define UNION_MATCH_RVALUE_REF_CASE_CALL(concatenated_info) UNION_MATCH_RVALUE_REF_CASE_IMPL concatenated_info
-#define UNION_MATCH_RVALUE_REF_CASE_IMPL(type_name, field_type, field_name)         \
-    case tag_t::field_name:                                                         \
-        if constexpr (requires { UNION_MATCH_RVALUE_REF_CASE_EXPR(field_name); }) { \
-            return UNION_MATCH_RVALUE_REF_CASE_EXPR(field_name);                    \
-        } else if constexpr (requires { UNION_MATCH_RVALUE_REF_OTHERWISE_EXPR; }) { \
-            return UNION_MATCH_RVALUE_REF_OTHERWISE_EXPR;                           \
-        } else {                                                                    \
-            return;                                                                 \
-        }
-
-#define UNION(type_name, ...)                                                                      \
-    struct type_name {                                                                             \
-        enum class tag_t {                                                                         \
-            FOR_EACH(UNION_TAG_FIELD, (type_name), __VA_ARGS__)                                    \
-        };                                                                                         \
-                                                                                                   \
-        template<tag_t tag>                                                                        \
-        struct alternative;                                                                        \
-        FOR_EACH(UNION_ALTERNATIVE_TYPE, (type_name), __VA_ARGS__)                                 \
-                                                                                                   \
-        template<tag_t tag>                                                                        \
-        using alternative_t = typename alternative<tag>::type;                                     \
-                                                                                                   \
-        union storage_t {                                                                          \
-            storage_t() {}                                                                         \
-            ~storage_t() {}                                                                        \
-            FOR_EACH(UNION_STORAGE_FIELD, (type_name), __VA_ARGS__)                                \
-        };                                                                                         \
-                                                                                                   \
-    private:                                                                                       \
-        tag_t m_tag;                                                                               \
-        storage_t m_storage;                                                                       \
-                                                                                                   \
-    public:                                                                                        \
-        type_name(type_name const &other) : m_tag(other.m_tag) {                                   \
-            switch (m_tag) {                                                                       \
-                FOR_EACH(UNION_COPY_CASE, (type_name), __VA_ARGS__)                                \
-            default:                                                                               \
-                assert(false && "bad tag");                                                        \
-            }                                                                                      \
-        }                                                                                          \
-                                                                                                   \
-        type_name(type_name &&other) : m_tag(other.m_tag) {                                        \
-            switch (m_tag) {                                                                       \
-                FOR_EACH(UNION_MOVE_CASE, (type_name), __VA_ARGS__)                                \
-            default:                                                                               \
-                assert(false && "bad tag");                                                        \
-            }                                                                                      \
-        }                                                                                          \
-                                                                                                   \
-        ~type_name() {                                                                             \
-            switch (m_tag) {                                                                       \
-                FOR_EACH(UNION_DESTRUCT_CASE, (type_name), __VA_ARGS__)                            \
-            default:                                                                               \
-                assert(false && "bad tag");                                                        \
-            }                                                                                      \
-        }                                                                                          \
-                                                                                                   \
-        type_name &operator=(type_name const &other) {                                             \
-            if (this != &other) {                                                                  \
-                this->~type_name();                                                                \
-                new (this) type_name((other));                                                     \
-            }                                                                                      \
-            return *this;                                                                          \
-        }                                                                                          \
-                                                                                                   \
-        type_name &operator=(type_name &&other) {                                                  \
-            if (this != &other) {                                                                  \
-                this->~type_name();                                                                \
-                new (this) type_name(std::move(other));                                            \
-            }                                                                                      \
-            return *this;                                                                          \
-        }                                                                                          \
-                                                                                                   \
-        template<tag_t tag>                                                                        \
-        bool holds() const {                                                                       \
-            return m_tag == tag;                                                                   \
-        }                                                                                          \
-                                                                                                   \
-        template<tag_t tag>                                                                        \
-        alternative_t<tag> &get_ref() & {                                                          \
-            FOR_EACH(UNION_GET_LVALUE_REF_IF_ELSE, (type_name), __VA_ARGS__) {                     \
-                static_assert(tag != tag, "bad tag");                                              \
-            }                                                                                      \
-        }                                                                                          \
-                                                                                                   \
-        template<tag_t tag>                                                                        \
-        alternative_t<tag> const &get_ref() const & {                                              \
-            FOR_EACH(UNION_GET_LVALUE_REF_IF_ELSE, (type_name), __VA_ARGS__) {                     \
-                static_assert(tag != tag, "bad tag");                                              \
-            }                                                                                      \
-        }                                                                                          \
-                                                                                                   \
-        template<tag_t tag>                                                                        \
-        alternative_t<tag> &&get_ref() && {                                                        \
-            FOR_EACH(UNION_GET_RVALUE_REF_IF_ELSE, (type_name), __VA_ARGS__) {                     \
-                static_assert(tag != tag, "bad tag");                                              \
-            }                                                                                      \
-        }                                                                                          \
-                                                                                                   \
-        template<tag_t tag>                                                                        \
-        alternative_t<tag> const &&get_ref() const && {                                            \
-            FOR_EACH(UNION_GET_RVALUE_REF_IF_ELSE, (type_name), __VA_ARGS__) {                     \
-                static_assert(tag != tag, "bad tag");                                              \
-            }                                                                                      \
-        }                                                                                          \
-                                                                                                   \
-        template<tag_t tag>                                                                        \
-        alternative_t<tag> *get_ptr() {                                                            \
-            return holds<tag>() ? &get_ref<tag>() : nullptr;                                       \
-        }                                                                                          \
-                                                                                                   \
-        template<tag_t tag>                                                                        \
-        alternative_t<tag> const *get_ptr() const {                                                \
-            return holds<tag>() ? &get_ref<tag>() : nullptr;                                       \
-        }                                                                                          \
-                                                                                                   \
-        template<tag_t tag, typename... Args>                                                      \
-        static type_name create(Args &&...args) {                                                  \
-            return type_name(tu::in_place_tag<tag>, std::forward<Args>(args)...);                  \
-        }                                                                                          \
-                                                                                                   \
-        template<tag_t tag, typename... Args>                                                      \
-        alternative_t<tag> &emplace(Args &&...args) {                                              \
-            this->~type_name();                                                                    \
-            new (this) type_name(tu::in_place_tag<tag>, std::forward<Args>(args)...);              \
-            return get_ref<tag>();                                                                 \
-        }                                                                                          \
-                                                                                                   \
-        FOR_EACH(UNION_SPECIFIC_METHOD, (type_name), __VA_ARGS__)                                  \
-                                                                                                   \
-        tag_t get_tag() const {                                                                    \
-            return m_tag;                                                                          \
-        }                                                                                          \
-                                                                                                   \
-        template<typename ReturnType, typename Visitor>                                            \
-        ReturnType visit(Visitor &&visitor) &                                                      \
-            requires(FOR_EACH(UNION_VISIT_LVALUE_REF_HAS_CASE_AND, (type_name), __VA_ARGS__) true) \
-        {                                                                                          \
-            switch (m_tag) {                                                                       \
-                FOR_EACH(UNION_VISIT_LVALUE_REF_CASE, (type_name), __VA_ARGS__)                    \
-            default:                                                                               \
-                assert(false && "bad tag");                                                        \
-            }                                                                                      \
-        }                                                                                          \
-                                                                                                   \
-        template<typename ReturnType, typename Visitor>                                            \
-        ReturnType visit(Visitor &&visitor) const &                                                \
-            requires(FOR_EACH(UNION_VISIT_LVALUE_REF_HAS_CASE_AND, (type_name), __VA_ARGS__) true) \
-        {                                                                                          \
-            switch (m_tag) {                                                                       \
-                FOR_EACH(UNION_VISIT_LVALUE_REF_CASE, (type_name), __VA_ARGS__)                    \
-            default:                                                                               \
-                assert(false && "bad tag");                                                        \
-            }                                                                                      \
-        }                                                                                          \
-                                                                                                   \
-        template<typename ReturnType, typename Visitor>                                            \
-        ReturnType visit(Visitor &&visitor) &&                                                     \
-            requires(FOR_EACH(UNION_VISIT_RVALUE_REF_HAS_CASE_AND, (type_name), __VA_ARGS__) true) \
-        {                                                                                          \
-            switch (m_tag) {                                                                       \
-                FOR_EACH(UNION_VISIT_RVALUE_REF_CASE, (type_name), __VA_ARGS__)                    \
-            default:                                                                               \
-                assert(false && "bad tag");                                                        \
-            }                                                                                      \
-        }                                                                                          \
-                                                                                                   \
-        template<typename ReturnType, typename Visitor>                                            \
-        ReturnType visit(Visitor &&visitor) const &&                                               \
-            requires(FOR_EACH(UNION_VISIT_RVALUE_REF_HAS_CASE_AND, (type_name), __VA_ARGS__) true) \
-        {                                                                                          \
-            switch (m_tag) {                                                                       \
-                FOR_EACH(UNION_VISIT_RVALUE_REF_CASE, (type_name), __VA_ARGS__)                    \
-            default:                                                                               \
-                assert(false && "bad tag");                                                        \
-            }                                                                                      \
-        }                                                                                          \
-                                                                                                   \
-        template<typename ReturnType, typename Matcher>                                            \
-        ReturnType match(Matcher &&matcher) &                                                      \
-            requires(FOR_EACH(UNION_MATCH_LVALUE_REF_HAS_CASE_AND, (type_name), __VA_ARGS__) true) \
-        {                                                                                          \
-            switch (m_tag) {                                                                       \
-                FOR_EACH(UNION_MATCH_LVALUE_REF_CASE, (type_name), __VA_ARGS__)                    \
-            default:                                                                               \
-                assert(false && "bad tag");                                                        \
-            }                                                                                      \
-        }                                                                                          \
-                                                                                                   \
-        template<typename ReturnType, typename Matcher>                                            \
-        ReturnType match(Matcher &&matcher) const &                                                \
-            requires(FOR_EACH(UNION_MATCH_LVALUE_REF_HAS_CASE_AND, (type_name), __VA_ARGS__) true) \
-        {                                                                                          \
-            switch (m_tag) {                                                                       \
-                FOR_EACH(UNION_MATCH_LVALUE_REF_CASE, (type_name), __VA_ARGS__)                    \
-            default:                                                                               \
-                assert(false && "bad tag");                                                        \
-            }                                                                                      \
-        }                                                                                          \
-                                                                                                   \
-        template<typename ReturnType, typename Matcher>                                            \
-        ReturnType match(Matcher &&matcher) &&                                                     \
-            requires(FOR_EACH(UNION_MATCH_RVALUE_REF_HAS_CASE_AND, (type_name), __VA_ARGS__) true) \
-        {                                                                                          \
-            switch (m_tag) {                                                                       \
-                FOR_EACH(UNION_MATCH_RVALUE_REF_CASE, (type_name), __VA_ARGS__)                    \
-            default:                                                                               \
-                assert(false && "bad tag");                                                        \
-            }                                                                                      \
-        }                                                                                          \
-                                                                                                   \
-        template<typename ReturnType, typename Matcher>                                            \
-        ReturnType match(Matcher &&matcher) const &&                                               \
-            requires(FOR_EACH(UNION_MATCH_RVALUE_REF_HAS_CASE_AND, (type_name), __VA_ARGS__) true) \
-        {                                                                                          \
-            switch (m_tag) {                                                                       \
-                FOR_EACH(UNION_MATCH_RVALUE_REF_CASE, (type_name), __VA_ARGS__)                    \
-            default:                                                                               \
-                assert(false && "bad tag");                                                        \
-            }                                                                                      \
-        }                                                                                          \
+#define UNION(type_name, ...)                                                            \
+    struct type_name {                                                                   \
+        enum class tag_t {                                                               \
+            FOR_EACH(UNION_TAG_FIELD, (type_name), __VA_ARGS__)                          \
+        };                                                                               \
+                                                                                         \
+        template<tag_t tag>                                                              \
+        struct alternative;                                                              \
+        FOR_EACH(UNION_ALTERNATIVE_TYPE, (type_name), __VA_ARGS__)                       \
+                                                                                         \
+        template<tag_t tag>                                                              \
+        using alternative_t = typename alternative<tag>::type;                           \
+                                                                                         \
+        union storage_t {                                                                \
+            storage_t() {}                                                               \
+            ~storage_t() {}                                                              \
+            FOR_EACH(UNION_STORAGE_FIELD, (type_name), __VA_ARGS__)                      \
+        };                                                                               \
+                                                                                         \
+    private:                                                                             \
+        tag_t m_tag;                                                                     \
+        storage_t m_storage;                                                             \
+                                                                                         \
+    public:                                                                              \
+        type_name(type_name const &other) : m_tag(other.m_tag) {                         \
+            switch (m_tag) {                                                             \
+                FOR_EACH(UNION_COPY_CASE, (type_name), __VA_ARGS__)                      \
+            default:                                                                     \
+                assert(false && "bad tag");                                              \
+            }                                                                            \
+        }                                                                                \
+                                                                                         \
+        type_name(type_name &&other) : m_tag(other.m_tag) {                              \
+            switch (m_tag) {                                                             \
+                FOR_EACH(UNION_MOVE_CASE, (type_name), __VA_ARGS__)                      \
+            default:                                                                     \
+                assert(false && "bad tag");                                              \
+            }                                                                            \
+        }                                                                                \
+                                                                                         \
+        ~type_name() {                                                                   \
+            switch (m_tag) {                                                             \
+                FOR_EACH(UNION_DESTRUCT_CASE, (type_name), __VA_ARGS__)                  \
+            default:                                                                     \
+                assert(false && "bad tag");                                              \
+            }                                                                            \
+        }                                                                                \
+                                                                                         \
+        type_name &operator=(type_name const &other) & {                                 \
+            if (this != &other) {                                                        \
+                this->~type_name();                                                      \
+                new (this) type_name((other));                                           \
+            }                                                                            \
+            return *this;                                                                \
+        }                                                                                \
+                                                                                         \
+        type_name &operator=(type_name &&other) & {                                      \
+            if (this != &other) {                                                        \
+                this->~type_name();                                                      \
+                new (this) type_name(std::move(other));                                  \
+            }                                                                            \
+            return *this;                                                                \
+        }                                                                                \
+                                                                                         \
+        FOR_EACH(UNION_SPECIFIC_METHOD, (type_name), __VA_ARGS__)                        \
+                                                                                         \
+        template<tag_t tag>                                                              \
+        bool holds() const {                                                             \
+            return m_tag == tag;                                                         \
+        }                                                                                \
+                                                                                         \
+        template<tag_t tag, typename Self>                                               \
+        auto &&get_ref(this Self &&self) {                                               \
+            FOR_EACH(UNION_GET_REF_IF_ELSE, (type_name), __VA_ARGS__) {                  \
+                static_assert(tag != tag, "bad tag");                                    \
+            }                                                                            \
+        }                                                                                \
+                                                                                         \
+        template<tag_t tag, typename Self>                                               \
+        auto *get_ptr(this Self &self) {                                                 \
+            return self.template holds<tag>() ? &self.template get_ref<tag>() : nullptr; \
+        }                                                                                \
+                                                                                         \
+        template<tag_t tag, typename... Args>                                            \
+        static type_name create(Args &&...args) {                                        \
+            return type_name(tu::in_place_tag<tag>, std::forward<Args>(args)...);        \
+        }                                                                                \
+                                                                                         \
+        template<tag_t tag, typename... Args>                                            \
+        alternative_t<tag> &emplace(Args &&...args) & {                                  \
+            this->~type_name();                                                          \
+            new (this) type_name(tu::in_place_tag<tag>, std::forward<Args>(args)...);    \
+            return get_ref<tag>();                                                       \
+        }                                                                                \
+                                                                                         \
+        tag_t get_tag() const {                                                          \
+            return m_tag;                                                                \
+        }                                                                                \
+                                                                                         \
+        template<typename ReturnType, typename Self, typename Visitor>                   \
+        ReturnType visit(this Self &&self, Visitor &&visitor)                            \
+            requires(FOR_EACH(UNION_VISIT_HAS_CASE_AND, (type_name), __VA_ARGS__) true)  \
+        {                                                                                \
+            switch (self.m_tag) {                                                        \
+                FOR_EACH(UNION_VISIT_CASE, (type_name), __VA_ARGS__)                     \
+            default:                                                                     \
+                assert(false && "bad tag");                                              \
+            }                                                                            \
+        }                                                                                \
+                                                                                         \
+        template<typename ReturnType, typename Self, typename Matcher>                   \
+        ReturnType match(this Self &&self, Matcher &&matcher)                            \
+            requires(FOR_EACH(UNION_MATCH_HAS_CASE_AND, (type_name), __VA_ARGS__) true)  \
+        {                                                                                \
+            switch (self.m_tag) {                                                        \
+                FOR_EACH(UNION_MATCH_CASE, (type_name), __VA_ARGS__)                     \
+            default:                                                                     \
+                assert(false && "bad tag");                                              \
+            }                                                                            \
+        }                                                                                \
     }
 #define FIELD(field_type, field_name) (field_type, field_name)
 
