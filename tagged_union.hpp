@@ -422,15 +422,19 @@
 #define MATCH_GEN_FUNC_CALL(sums) MATCH_GEN_FUNC_IMPL sums
 #define MATCH_GEN_FUNC_IMPL(return_type, value, kind, ...) \
     MATCH_GEN_##kind##_FUNC(return_type, value, __VA_ARGS__)
-#define MATCH_GEN_CASE_FUNC(return_type, value, field_name, var_name, block) \
-    [&](tu::in_place_tag_t<std::remove_reference_t<decltype((value))>::tag_t::field_name>, auto &&var_name) block,
-#define MATCH_GEN_OTHERWISE_FUNC(return_type, value, var_name, block) \
-    [&](auto &&var_name) block,
+#define MATCH_GEN_CASE_FUNC(return_type, value, field_name, var_name, ...)                                                   \
+    [&](tu::in_place_tag_t<std::remove_reference_t<decltype((value))>::tag_t::field_name>, auto &&var_name) -> return_type { \
+        __VA_ARGS__                                                                                                          \
+    },
+#define MATCH_GEN_OTHERWISE_FUNC(return_type, value, var_name, ...) \
+    [&](auto &&var_name) -> return_type {                           \
+        __VA_ARGS__                                                 \
+    },
 
 #define MATCH(return_type, value, ...) \
     (value).visit<return_type>(tu::combined_visitor{FOR_EACH(MATCH_GEN_FUNC, (return_type, value), __VA_ARGS__)})
-#define CASE(field_name, var_name, block) (CASE, field_name, var_name, block)
-#define OTHERWISE(var_name, block) (OTHERWISE, var_name, block)
+#define CASE(field_name, var_name, ...) (CASE, field_name, var_name, __VA_ARGS__)
+#define OTHERWISE(var_name, ...) (OTHERWISE, var_name, __VA_ARGS__)
 
 namespace tu {
 template<auto tag>
