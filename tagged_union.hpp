@@ -29,7 +29,7 @@
 
 #define FORWARD(unpacked) unpacked
 
-#define TRY_UNPACK_PROBE(packed) 0, 1
+#define TRY_UNPACK_PROBE(...) 0, 1
 #define TRY_UNPACK_OPERATION(may_packed) TRY_UNPACK_OPERATION_CALL((TRY_UNPACK_PROBE may_packed, UNPACK, FORWARD))
 #define TRY_UNPACK_OPERATION_CALL(probe) TRY_UNPACK_OPERATION_IMPL probe
 #define TRY_UNPACK_OPERATION_IMPL(_0, _1, operation, ...) operation
